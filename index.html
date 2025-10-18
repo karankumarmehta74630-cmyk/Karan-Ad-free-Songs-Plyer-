@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Karan Music — User + Admin</title>
+
+<!-- Firebase compat SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+<!-- YouTube IFrame API -->
+<script src="https://www.youtube.com/iframe_api"></script>
+
+<style>
+:root{--accent:#1db954;--muted:#9fb3c6}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,Arial;background:#07080a;color:#eaf6f5;min-height:100vh}
+.container{max-width:1100px;margin:20px auto;padding:16px;display:grid;grid-template-columns:320px 1fr;gap:18px}
+.card{background:rgba(255,255,255,0.03);padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,0.03)}
+.brand{font-weight:800;font-size:18px;margin-bottom:8px}
+.small{color:var(--muted);font-size:13px}
+.input{width:100%;padding:10px;margin:8px 0;border-radius:8px;border:none;background:rgba(255,255,255,0.02);color:inherit}
+.row{display:flex;gap:8px}
+.btn{padding:10px 12px;border-radius:8px;border:none;background:linear-gradient(90deg,var(--accent),#06b6d4);color:#001821;font-weight:700;cursor:pointer}
+.playlist{max-height:68vh;overflow:auto;margin-top:10px}
+.track{display:flex;gap:10px;align-items:center;padding:8px;border-radius:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.02);transition:transform .12s}
+.track:hover{transform:translateY(-4px);background:rgba(255,255,255,0.02)}
+.cover{width:56px;height:56px;border-radius:8px;object-fit:cover}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;overflow:auto;max-height:75vh;padding:8px}
+.album{background:rgba(255,255,255,0.02);padding:10px;border-radius:12px;cursor:pointer}
+.album img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px}
+.playerBar{position:fixed;left:16px;right:16px;bottom:16px;background:linear-gradient(180deg,rgba(0,0,0,0.6),rgba(0,0,0,0.9));padding:12px;border-radius:12px;display:flex;gap:12px;align-items:center}
+.pb-cover{width:64px;height:64px;border-radius:8px;overflow:hidden}
+.pb-cover img{width:100%;height:100%;object-fit:cover}
+.controls{display:flex;gap:8px;align-items:center}
+.controlBtn{width:42px;height:42px;border-radius:8px;border:none;background:rgba(255,255,255,0.02);color:white;cursor:pointer}
+.bigPlay{width:56px;height:56px;border-radius:12px;background:linear-gradient(90deg,var(--accent),#06b6d4);color:#001821;font-weight:800}
+.userInfo{display:flex;gap:8px;align-items:center}
+.tick-img{width:18px;height:18px;display:inline-block;vertical-align:middle}
+.admin-bar{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.hidden{display:none}
+.notice{font-size:13px;color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- left: auth + playlist / admin login -->
+  <aside class="card" id="leftCard">
+    <div class="brand">Karan Music</div>
+
+    <!-- Auth UI -->
+    <div id="authPanel">
+      <div class="small">Create Account</div>
+      <input id="signupName" class="input" placeholder="Full name">
+      <input id="signupPhone" class="input" placeholder="Mobile number (digits)">
+      <input id="signupEmail" class="input" placeholder="Email">
+      <input id="signupPassword" type="password" class="input" placeholder="Password (6+ chars)">
+      <div class="row">
+        <button id="btnSignup" class="btn">Sign up</button>
+        <button id="btnSwitchLogin" class="btn" style="background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.03)">Login</button>
+      </div>
+      <div style="height:12px"></div>
+      <div id="loginBox" class="hidden">
+        <div class="small">Login (email OR phone)</div>
+        <input id="loginIdentifier" class="input" placeholder="Email or Mobile number">
+        <input id="loginPassword" type="password" class="input" placeholder="Password">
+        <div class="row">
+          <button id="btnLogin" class="btn">Login</button>
+          <button id="btnGuest" class="btn" style="background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.03)">Guest</button>
+        </div>
+      </div>
+
+      <div class="notice">Admin quick-login: ID <b>karan</b> / Pass <b>123</b> (opens admin panel)</div>
+    </div>
+
+    <hr style="border-color:rgba(255,255,255,0.03)">
+
+    <div class="small">Playlist</div>
+    <div id="playlist" class="playlist"></div>
+  </aside>
+
+  <!-- main: grid & admin panel area -->
+  <main class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:800;font-size:18px">Discover</div>
+        <div class="small">Realtime songs from Firestore</div>
+      </div>
+
+      <div class="admin-bar">
+        <div id="userInfoArea" class="userInfo"><span id="loggedAs">Guest</span></div>
+        <div>
+          <button id="btnOpenAdmin" class="btn" style="background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.03)">Admin</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main content: either user grid or admin panel -->
+    <div id="mainContent">
+      <div id="grid" class="grid"></div>
+    </div>
+
+    <!-- Admin panel (hidden until admin login via karan/123) -->
+    <div id="adminPanel" class="hidden" style="margin-top:12px">
+      <h3>Admin Panel</h3>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="adminId" class="input" placeholder="Admin ID">
+        <input id="adminPass" type="password" class="input" placeholder="Password">
+        <button id="btnAdminLogin" class="btn">Sign in</button>
+        <button id="btnAdminLogout" class="btn" style="background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.03)">Sign out</button>
+      </div>
+
+      <hr style="border-color:rgba(255,255,255,0.03)">
+
+      <h4>Add Song</h4>
+      <input id="songTitle" class="input" placeholder="Title">
+      <input id="songArtist" class="input" placeholder="Artist">
+      <input id="songCover" class="input" placeholder="Cover image URL (optional)">
+      <input id="songYoutube" class="input" placeholder="YouTube link or ID">
+      <div style="display:flex;gap:8px">
+        <button id="btnAddSong" class="btn">Add Song</button>
+        <button id="btnFetchMeta" class="btn" style="background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.03)">Fetch Meta</button>
+      </div>
+
+      <hr style="border-color:rgba(255,255,255,0.03)">
+
+      <h4>Users</h4>
+      <div id="usersList" style="max-height:300px;overflow:auto"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Player bar -->
+<div class="playerBar" aria-hidden="false">
+  <div class="pb-cover"><img id="pbCover" src="" alt=""></div>
+  <div style="flex:1">
+    <div id="pbTitle" style="font-weight:700">—</div>
+    <div id="pbMeta" class="small">—</div>
+  </div>
+  <div class="controls">
+    <button class="controlBtn" id="prevBtn">⏮️</button>
+    <button class="bigPlay" id="playBtn">▶</button>
+    <button class="controlBtn" id="nextBtn">⏭️</button>
+  </div>
+  <div style="width:220px;display:flex;gap:8px;align-items:center;justify-content:flex-end">
+    <input id="vol" type="range" min="0" max="3" step="0.05" value="1">
+  </div>
+</div>
+
+<!-- hidden YT container -->
+<div id="ytplayer" style="display:none"></div>
+
+<script>
+/* ================== Firebase init ================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyARxYr4nbMIKdkbXiWWyRXoxiPUDZprqgQ",
+  authDomain: "ward16protal.firebaseapp.com",
+  projectId: "ward16protal",
+  storageBucket: "ward16protal.appspot.com",
+  messagingSenderId: "300302802622",
+  appId: "1:300302802622:web:8e483eecff95a5d2e788ef"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* ========== UI refs ========== */
+const btnSignup = document.getElementById('btnSignup');
+const btnLogin = document.getElementById('btnLogin');
+const btnSwitchLogin = document.getElementById('btnSwitchLogin');
+const btnGuest = document.getElementById('btnGuest');
+const signupName = document.getElementById('signupName');
+const signupPhone = document.getElementById('signupPhone');
+const signupEmail = document.getElementById('signupEmail');
+const signupPassword = document.getElementById('signupPassword');
+const loginIdentifier = document.getElementById('loginIdentifier');
+const loginPassword = document.getElementById('loginPassword');
+const loggedAs = document.getElementById('loggedAs');
+const userInfoArea = document.getElementById('userInfoArea');
+const playlistEl = document.getElementById('playlist');
+const gridEl = document.getElementById('grid');
+const btnOpenAdmin = document.getElementById('btnOpenAdmin');
+const adminPanel = document.getElementById('adminPanel');
+const btnAdminLogin = document.getElementById('btnAdminLogin');
+const btnAdminLogout = document.getElementById('btnAdminLogout');
+const adminId = document.getElementById('adminId');
+const adminPass = document.getElementById('adminPass');
+const usersList = document.getElementById('usersList');
+const btnAddSong = document.getElementById('btnAddSong');
+const btnFetchMeta = document.getElementById('btnFetchMeta');
+const songTitle = document.getElementById('songTitle');
+const songArtist = document.getElementById('songArtist');
+const songCover = document.getElementById('songCover');
+const songYoutube = document.getElementById('songYoutube');
+
+const prevBtn = document.getElementById('prevBtn');
+const playBtn = document.getElementById('playBtn');
+const nextBtn = document.getElementById('nextBtn');
+const volSlider = document.getElementById('vol');
+const pbCover = document.getElementById('pbCover');
+const pbTitle = document.getElementById('pbTitle');
+const pbMeta = document.getElementById('pbMeta');
+
+let songs = [], currentIndex = -1, ytPlayer = null, ytReady = false;
+const BLUE_TICK_PNG = "https://i.ibb.co/XwDBZrZ/checklist-10629607.png";
+
+/* ================== Helpers ================== */
+function sanitize(s){ return s ? String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])) : ''; }
+
+function extractVideoId(input){
+  if(!input) return null;
+  const s = String(input).trim();
+  const patterns = [
+    /(?:youtube\.com.*(?:\?|&)v=)([A-Za-z0-9_-]{11})/,
+    /youtu\.be\/([A-Za-z0-9_-]{11})/,
+    /youtube\.com\/embed\/([A-Za-z0-9_-]{11})/,
+    /youtube\.com\/shorts\/([A-Za-z0-9_-]{11})/,
+    /([A-Za-z0-9_-]{11})/
+  ];
+  for(const re of patterns){
+    const m = s.match(re);
+    if(m && m[1]) return m[1];
+  }
+  return null;
+}
+
+/* ================== YouTube API ================== */
+function onYouTubeIframeAPIReady(){
+  ytPlayer = new YT.Player('ytplayer', { height:'0', width:'0', videoId:'', playerVars:{playsinline:1,rel:0}, events:{onReady:()=>{ytReady=true;}}});
+}
+
+/* ================== Auth: Signup / Login ================== */
+// Toggle show login box
+btnSwitchLogin.addEventListener('click', ()=> {
+  document.getElementById('loginBox').classList.toggle('hidden');
+});
+
+// Signup (email/password) => create user and user doc
+btnSignup.addEventListener('click', async ()=>{
+  const name = signupName.value.trim();
+  const phone = signupPhone.value.trim();
+  const email = signupEmail.value.trim();
+  const pass = signupPassword.value.trim();
+  if(!name || !phone || !email || !pass) return alert('Fill all fields');
+  try {
+    const cred = await auth.createUserWithEmailAndPassword(email, pass);
+    // create users doc (we store phone & name & verified flag)
+    await db.collection('users').doc(cred.user.uid).set({
+      name, phone, email, verified:false, verifyType:null, verifyExpiry:null, createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      // WARNING: we DO NOT store password here for email signups (auth handles it)
+    });
+    alert('Account created and logged in');
+  } catch(e){ alert(e.message); }
+});
+
+// Login by email or phone
+btnLogin.addEventListener('click', async ()=>{
+  const id = document.getElementById('loginIdentifier').value.trim();
+  const pass = loginPassword.value.trim();
+  if(!id || !pass) return alert('Enter credentials');
+
+  // admin quick login (local)
+  if(id.toLowerCase() === 'karan' && pass === '123'){
+    openAdminPanelLocal();
+    return;
+  }
+
+  // If looks like email (contains @) -> Firebase Auth signInWithEmailAndPassword
+  if(id.includes('@')){
+    try {
+      await auth.signInWithEmailAndPassword(id, pass);
+    } catch(e){ alert(e.message); }
+    return;
+  }
+
+  // Else treat as phone number: find user doc with phone==id, then sign in by checking stored "password" (prototype)
+  try {
+    const q = await db.collection('users').where('phone','==', id).limit(1).get();
+    if(q.empty) return alert('User with this phone not found');
+    const doc = q.docs[0];
+    const u = doc.data();
+    // For phone-based accounts, we need a stored password — prototype: store `phonePassword` field when creating via phone flow.
+    // If no password field, ask user to use email login or sign up with email.
+    if(!u.phonePassword){
+      return alert('This account has no phone-password. Use email login or sign up with email.');
+    }
+    if(u.phonePassword !== pass) return alert('Invalid password');
+    // successful phone login: set a lightweight session in localStorage (prototype)
+    localStorage.setItem('phoneLoginUid', doc.id);
+    // emulate auth state for UI by loading user data
+    loadUserSession(doc.id, u);
+  } catch(e){ console.error(e); alert('Login error'); }
+});
+
+// Guest quick in-page
+btnGuest.addEventListener('click', ()=> {
+  loggedAs.textContent = 'Guest';
+  userInfoArea.innerHTML = '';
+  loadSongsRealtime();
+});
+
+/* ========== Auth state changes (email logins) ========== */
+auth.onAuthStateChanged(async u => {
+  if(u){
+    // load user doc
+    const doc = await db.collection('users').doc(u.uid).get();
+    const data = doc.exists ? doc.data() : null;
+    loadUserSession(u.uid, data);
+  } else {
+    // if phone-login via localStorage:
+    const phoneUid = localStorage.getItem('phoneLoginUid');
+    if(phoneUid){
+      const doc = await db.collection('users').doc(phoneUid).get();
+      if(doc.exists) { loadUserSession(phoneUid, doc.data()); return; }
+    }
+    // otherwise show guest
+    loggedAs.textContent = 'Guest';
+    userInfoArea.innerHTML = '';
+    gridEl.innerHTML = '';
+    playlistEl.innerHTML = '';
+  }
+});
+
+/* Load user session UI and subscribe to songs */
+async function loadUserSession(uid, userDocData){
+  // userDocData might be null for new users signed up (shouldn't), fetch if needed
+  let userObj = userDocData;
+  if(!userObj){
+    const d = await db.collection('users').doc(uid).get();
+    userObj = d.exists ? d.data() : { email: 'unknown', verified:false };
+  }
+  loggedAs.textContent = userObj.email || userObj.name || 'User';
+  // show blue tick if verified
+  if(userObj.verified){
+    userInfoArea.innerHTML = `<div>${sanitize(userObj.name || userObj.email)} <img class="tick-img" src="${BLUE_TICK_PNG}" alt="verified" title="Verified"></div>`;
+  } else {
+    userInfoArea.innerHTML = `<div>${sanitize(userObj.name || userObj.email)}</div>`;
+  }
+  // subscribe to songs and render
+  loadSongsRealtime();
+}
+
+/* ================== Admin panel (local quick-login for prototype) ================== */
+btnOpenAdmin.addEventListener('click', ()=> {
+  // show admin inputs if they want to quick-auth
+  adminPanel.classList.toggle('hidden');
+});
+
+btnAdminLogin.addEventListener('click', async ()=>{
+  const id = adminId.value.trim();
+  const pass = adminPass.value.trim();
+  if(id.toLowerCase()==='karan' && pass==='123'){
+    // show admin UI
+    adminPanel.classList.remove('hidden');
+    // load songs + users
+    loadSongsForAdmin();
+    loadUsersForAdmin();
+    alert('Admin signed in (local)');
+  } else {
+    alert('Invalid admin credentials');
+  }
+});
+
+btnAdminLogout.addEventListener('click', ()=> {
+  adminPanel.classList.add('hidden');
+});
+
+/* Admin: add song */
+btnAddSong.addEventListener('click', async ()=>{
+  const t = songTitle.value.trim();
+  const a = songArtist.value.trim();
+  const c = songCover.value.trim();
+  const y = songYoutube.value.trim();
+  if(!t || !y) return alert('Title and YouTube required');
+  try {
+    await db.collection('songs').add({
+      title: t, artist: a, cover: c || '', youtube: y, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    songTitle.value = songArtist.value = songCover.value = songYoutube.value = '';
+    alert('Song added');
+  } catch(e){ alert(e.message); }
+});
+
+/* Fetch meta using YouTube oEmbed (CORS allowed) */
+btnFetchMeta.addEventListener('click', async ()=>{
+  const y = songYoutube.value.trim();
+  const id = extractVideoId(y);
+  if(!id) return alert('Invalid YouTube link');
+  try {
+    const res = await fetch('https://www.youtube.com/oembed?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + id) + '&format=json');
+    const meta = await res.json();
+    songTitle.value = meta.title || '';
+    songArtist.value = meta.author_name || '';
+    songCover.value = meta.thumbnail_url || '';
+  } catch(e){ alert('Could not fetch metadata'); }
+});
+
+/* ================== Load songs (user view) ================== */
+function loadSongsRealtime(){
+  db.collection('songs').orderBy('createdAt','desc').onSnapshot(snap=>{
+    songs = []; playlistEl.innerHTML = ''; gridEl.innerHTML = '';
+    let idx = 0;
+    snap.forEach(doc=>{
+      const d = doc.data(); d._id = doc.id;
+      songs.push(d);
+      // playlist
+      const t = document.createElement('div'); t.className = 'track';
+      t.innerHTML = `<img class="cover" src="${sanitize(d.cover || ('https://img.youtube.com/vi/' + (extractVideoId(d.youtube)||'dQw4w9WgXcQ') + '/hqdefault.jpg'))}">
+                     <div style="min-width:0">
+                       <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sanitize(d.title || 'Untitled')}</div>
+                       <div class="small" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sanitize(d.artist || '')}</div>
+                     </div>`;
+      (function(i){ t.addEventListener('click', ()=> playIndex(i)); })(idx);
+      playlistEl.appendChild(t);
+      // grid
+      const g = document.createElement('div'); g.className = 'album';
+      g.innerHTML = `<img src="${sanitize(d.cover || ('https://img.youtube.com/vi/' + (extractVideoId(d.youtube)||'dQw4w9WgXcQ') + '/hqdefault.jpg'))}" alt="">
+                     <div style="margin-top:8px;font-weight:700">${sanitize(d.title)}</div>
+                     <div class="small">${sanitize(d.artist)}</div>`;
+      (function(i){ g.addEventListener('click', ()=> playIndex(i)); })(idx);
+      gridEl.appendChild(g);
+      idx++;
+    });
+    if(songs.length === 0) playlistEl.innerHTML = '<div class="small">No songs yet</div>';
+  }, err => {
+    console.error(err); playlistEl.innerHTML = '<div class="small">Error loading songs</div>';
+  });
+}
+
+/* ================== Admin views: songs & users ================== */
+function loadSongsForAdmin(){
+  const container = document.getElementById('playlist'); // reuse
+  // show admin song list in users list area? we keep admin-specific list below users
+}
+async function loadUsersForAdmin(){
+  usersList.innerHTML = 'Loading...';
+  const snap = await db.collection('users').orderBy('createdAt','desc').get();
+  usersList.innerHTML = '';
+  snap.forEach(doc=>{
+    const u = doc.data();
+    const id = doc.id;
+    const div = document.createElement('div');
+    div.className = 'user-item';
+    div.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center">
+      <div><strong>${sanitize(u.name || u.email || id)}</strong><div class="small">${sanitize(u.email || '')} ${u.verified?'<img class="tick-img" src="'+BLUE_TICK_PNG+'">':''}</div></div>
+      <div style="display:flex;gap:6px">
+        <button onclick="setVerify('${id}','1month')">1 month</button>
+        <button onclick="setVerify('${id}','3month')">3 month</button>
+        <button onclick="setVerify('${id}','permanent')">Permanent</button>
+        <button onclick="removeVerify('${id}')">Remove</button>
+      </div>
+    </div>`;
+    usersList.appendChild(div);
+  });
+}
+
+/* Admin verify functions */
+async function setVerify(uid, type){
+  let expiry = null;
+  if(type === '1month'){ expiry = new Date(); expiry.setMonth(expiry.getMonth()+1); }
+  else if(type === '3month'){ expiry = new Date(); expiry.setMonth(expiry.getMonth()+3); }
+  try {
+    await db.collection('users').doc(uid).update({
+      verified: true,
+      verifyType: type,
+      verifyExpiry: expiry ? firebase.firestore.Timestamp.fromDate(expiry) : null
+    });
+    alert('Verified '+type);
+    loadUsersForAdmin();
+  } catch(e){ alert(e.message); }
+}
+async function removeVerify(uid){
+  try {
+    await db.collection('users').doc(uid).update({ verified:false, verifyType:null, verifyExpiry:null });
+    alert('Removed verification');
+    loadUsersForAdmin();
+  } catch(e){ alert(e.message); }
+}
+
+/* ================== Player controls ================== */
+function playIndex(i){
+  if(i<0||i>=songs.length) return;
+  currentIndex = i;
+  const track = songs[i];
+  const id = extractVideoId(track.youtube || track.link || track.url || '');
+  if(!id) return alert('Invalid YouTube link for this track');
+  // update UI
+  pbCover.src = track.cover || ('https://img.youtube.com/vi/' + id + '/hqdefault.jpg');
+  pbTitle.textContent = track.title || 'Untitled';
+  pbMeta.textContent = track.artist || '';
+  // try play
+  const tryPlay = ()=> {
+    try {
+      if(ytReady && ytPlayer && typeof ytPlayer.loadVideoById === 'function'){
+        ytPlayer.loadVideoById(id);
+        ytPlayer.setVolume(Math.round((parseFloat(volSlider.value || 1)/3)*100));
+        ytPlayer.playVideo();
+        playBtn.textContent = '⏸';
+        return true;
+      }
+    } catch(e){ console.error(e); }
+    return false;
+  };
+  if(!tryPlay()){
+    let attempts = 0;
+    const it = setInterval(()=> {
+      attempts++;
+      if(tryPlay() || attempts>50) clearInterval(it);
+    }, 150);
+  }
+}
+playBtn.addEventListener('click', ()=> {
+  if(!ytPlayer) return;
+  const st = ytPlayer.getPlayerState();
+  if(st === YT.PlayerState.PLAYING){ ytPlayer.pauseVideo(); playBtn.textContent = '▶'; }
+  else { ytPlayer.playVideo(); playBtn.textContent = '⏸'; }
+});
+nextBtn.addEventListener('click', ()=> { if(songs.length) playIndex((currentIndex+1)%songs.length); });
+prevBtn.addEventListener('click', ()=> { if(songs.length) playIndex((currentIndex-1+songs.length)%songs.length); });
+volSlider.addEventListener('input', ()=> { if(ytPlayer) ytPlayer.setVolume(Math.round((parseFloat(volSlider.value)/3)*100)); });
+
+/* ================== Utility: phone signup helper ================== */
+/* If you want phone-login with storing phonePassword (prototype) you can add a flow; for now email signup creates users docs */
+async function phoneSignup(phone, password, name, email){
+  // Prototype only — warns: storing plain password is insecure
+  const temp = await db.collection('users').add({
+    phone, phonePassword: password, name, email, verified:false, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  return temp.id;
+}
+
+/* ================== On load, start listening to songs for guests ================== */
+loadSongsRealtime();
+
+</script>
+</body>
+</html>
